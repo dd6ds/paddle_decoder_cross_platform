@@ -1,0 +1,161 @@
+════════════════════════════════════════════════════════════════════════
+        🍎 macOS CROSS-COMPILATION FROM LINUX - QUICKSTART
+════════════════════════════════════════════════════════════════════════
+
+This guide shows you how to build macOS binaries on your Manjaro Linux PC.
+
+════════════════════════════════════════════════════════════════════════
+📋 METHOD 1: IF YOU ALREADY HAVE OSXCROSS (FAST!)
+════════════════════════════════════════════════════════════════════════
+
+If you already set up osxcross before, just run:
+
+    cd /home/developer/rust/paddle_decoder_cross_platform
+    ./build_macos_cross.sh
+
+Or build for ALL platforms at once:
+
+    ./build_all_platforms.sh
+
+Your binaries will be in the 'release/' folder!
+
+
+════════════════════════════════════════════════════════════════════════
+🛠️  METHOD 2: FIRST TIME SETUP (ONE-TIME, ~15 MINUTES)
+════════════════════════════════════════════════════════════════════════
+
+Step 1: Install system dependencies
+───────────────────────────────────
+    sudo pacman -S clang cmake libxml2 openssl zlib git
+
+Step 2: Download macOS SDK
+──────────────────────────
+    Open browser: https://github.com/joseluisq/macosx-sdks/releases
+    Download: MacOSX13.3.sdk.tar.xz (or latest version)
+    Save to: ~/Downloads/
+
+Step 3: Run the automated setup
+───────────────────────────────
+    cd /home/developer/rust/paddle_decoder_cross_platform
+    ./setup_macos_crosscompile.sh
+
+    The script will:
+    ✅ Clone osxcross
+    ✅ Ask you to copy the SDK (see Step 4)
+    ✅ Build osxcross toolchain
+    ✅ Configure Cargo
+
+Step 4: Copy SDK when prompted
+──────────────────────────────
+    When the script asks, run in another terminal:
+    
+    cp ~/Downloads/MacOSX13.3.sdk.tar.xz ~/osxcross/tarballs/
+
+    Then press 'y' in the setup script to continue.
+
+Step 5: Add osxcross to PATH
+────────────────────────────
+    The script will show you a command like:
+    
+    export PATH="$HOME/osxcross/target/bin:$PATH"
+
+    Add this to your ~/.bashrc:
+    
+    echo 'export PATH="$HOME/osxcross/target/bin:$PATH"' >> ~/.bashrc
+    source ~/.bashrc
+
+Step 6: Verify installation
+───────────────────────────
+    x86_64-apple-darwin20.4-clang --version
+
+    If this shows version info, you're ready!
+
+Step 7: Build for macOS
+──────────────────────
+    ./build_macos_cross.sh
+
+
+════════════════════════════════════════════════════════════════════════
+⚡ QUICK BUILD COMMANDS
+════════════════════════════════════════════════════════════════════════
+
+🍎 Build macOS only (Intel + Apple Silicon):
+    ./build_macos_cross.sh
+
+🚀 Build ALL platforms (Linux + Windows + macOS):
+    ./build_all_platforms.sh
+
+💻 Build manually for Intel Macs:
+    cargo build --release --target x86_64-apple-darwin
+
+🍏 Build manually for Apple Silicon:
+    cargo build --release --target aarch64-apple-darwin
+
+
+════════════════════════════════════════════════════════════════════════
+📂 WHERE ARE THE BINARIES?
+════════════════════════════════════════════════════════════════════════
+
+After building, find your macOS binaries here:
+
+    release/paddle_decoder_x86_64_macOS      (Intel Macs)
+    release/paddle_decoder_aarch64_macOS     (Apple Silicon M1/M2/M3)
+
+Or in the target folders:
+
+    target/x86_64-apple-darwin/release/paddle_decoder
+    target/aarch64-apple-darwin/release/paddle_decoder
+
+
+════════════════════════════════════════════════════════════════════════
+🔍 TROUBLESHOOTING
+════════════════════════════════════════════════════════════════════════
+
+Error: "x86_64-apple-darwin20.4-clang not found"
+───────────────────────────────────────────────
+    Solution: osxcross not in PATH
+    
+    export PATH="$HOME/osxcross/target/bin:$PATH"
+    source ~/.bashrc
+
+Error: "SDK not found"
+─────────────────────
+    Solution: Copy SDK to correct location
+    
+    cp ~/Downloads/MacOSX*.sdk.tar.xz ~/osxcross/tarballs/
+
+Error: "linker failed"
+─────────────────────
+    Solution: Check Cargo config
+    
+    cat ~/.cargo/config.toml
+    # Should contain macOS target configuration
+
+
+════════════════════════════════════════════════════════════════════════
+📚 MORE INFORMATION
+════════════════════════════════════════════════════════════════════════
+
+Full detailed guide:     BUILD_MACOS_CROSS.md
+Scripts available:       build_macos_cross.sh, build_all_platforms.sh
+Setup script:            setup_macos_crosscompile.sh
+
+
+════════════════════════════════════════════════════════════════════════
+🎯 TL;DR - FASTEST PATH
+════════════════════════════════════════════════════════════════════════
+
+1. Download SDK: https://github.com/joseluisq/macosx-sdks/releases
+2. Run: sudo pacman -S clang cmake libxml2 openssl zlib git
+3. Run: ./setup_macos_crosscompile.sh
+4. When asked, copy SDK: cp ~/Downloads/MacOSX*.sdk.tar.xz ~/osxcross/tarballs/
+5. Add to PATH: echo 'export PATH="$HOME/osxcross/target/bin:$PATH"' >> ~/.bashrc
+6. Restart terminal
+7. Build: ./build_macos_cross.sh
+
+Done! Your macOS binaries are in the release/ folder!
+
+
+════════════════════════════════════════════════════════════════════════
+73! 📻 Happy Building!
+════════════════════════════════════════════════════════════════════════
