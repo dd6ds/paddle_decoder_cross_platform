@@ -2,6 +2,10 @@
 # Build paddle_decoder for ALL platforms from Linux
 # Targets: Linux, Windows, macOS (Intel + Apple Silicon)
 
+export PATH="$HOME/osxcross/target/bin:$PATH"
+which x86_64-apple-darwin23.5-clang
+cd /home/developer/rust/paddle_decoder_cross_platform
+
 set -e
 
 echo "🚀 Building paddle_decoder for ALL platforms..."
@@ -10,14 +14,28 @@ echo ""
 # Check prerequisites
 echo "🔍 Checking prerequisites..."
 
-# Check for osxcross
-if ! command -v x86_64-apple-darwin20.4-clang &> /dev/null; then
-    echo "⚠️  Warning: osxcross not found in PATH - macOS builds will be skipped"
-    echo "   To enable macOS builds, run: ./setup_macos_crosscompile.sh"
-    SKIP_MACOS=1
+# Check for osxcross and auto-add to PATH if found
+SKIP_MACOS=1
+if [ -d "$HOME/osxcross/target/bin" ]; then
+    # osxcross directory exists, check if it's in PATH
+    if ! echo "$PATH" | grep -q "osxcross"; then
+        echo "🔧 Found osxcross but not in PATH - adding temporarily..."
+        export PATH="$HOME/osxcross/target/bin:$PATH"
+    fi
+    
+    # Now check if we can actually use it
+    if command -v x86_64-apple-darwin23.5-clang &> /dev/null || \
+       command -v x86_64-apple-darwin20.4-clang &> /dev/null || \
+       command -v aarch64-apple-darwin23.5-clang &> /dev/null; then
+        echo "✓ osxcross found and ready"
+        SKIP_MACOS=0
+    else
+        echo "⚠️  Warning: osxcross found but clang not working"
+        SKIP_MACOS=1
+    fi
 else
-    echo "✓ osxcross found"
-    SKIP_MACOS=0
+    echo "⚠️  Warning: osxcross not installed at ~/osxcross"
+    echo "   To enable macOS builds, run: ./setup_macos_crosscompile.sh"
 fi
 
 # Check for MinGW (64-bit and 32-bit)
