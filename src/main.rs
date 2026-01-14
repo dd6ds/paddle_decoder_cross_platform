@@ -43,7 +43,7 @@ impl MorseDecoder {
         self.last_element_time = Some(Instant::now());
     }
     
-    fn check_timeout(&mut self) -> Option<char> {
+    fn check_timeout(&mut self) -> Option<String> {
         if let Some(last_time) = self.last_element_time {
             let elapsed = last_time.elapsed().as_millis() as u32;
             
@@ -57,25 +57,33 @@ impl MorseDecoder {
         None
     }
     
-    fn decode_sequence(&self) -> char {
+    fn decode_sequence(&self) -> String {
         match self.current_sequence.as_str() {
-            ".-" => 'A', "-..." => 'B', "-.-." => 'C', "-.." => 'D',
-            "." => 'E', "..-." => 'F', "--." => 'G', "...." => 'H',
-            ".." => 'I', ".---" => 'J', "-.-" => 'K', ".-.." => 'L',
-            "--" => 'M', "-." => 'N', "---" => 'O', ".--." => 'P',
-            "--.-" => 'Q', ".-." => 'R', "..." => 'S', "-" => 'T',
-            "..-" => 'U', "...-" => 'V', ".--" => 'W', "-..-" => 'X',
-            "-.--" => 'Y', "--.." => 'Z',
-            "-----" => '0', ".----" => '1', "..---" => '2', "...--" => '3',
-            "....-" => '4', "....." => '5', "-...." => '6', "--..." => '7',
-            "---.." => '8', "----." => '9',
-            ".-.-.-" => '.', "--..--" => ',', "..--.." => '?', ".----." => '\'',
-            "-.-.--" => '!', "-..-." => '/', "-.--." => '(', "-.--.-" => ')',
-            ".-..." => '&', "---..." => ':', "-.-.-." => ';', "-...-" => '=',
-            ".-.-." => '+', "-....-" => '-', "..--.-" => '_', ".-..-." => '"',
-            "...-..-" => '$', ".--.-." => '@',
-            _ => '?',
-        }
+            // Letters
+            ".-" => "A", "-..." => "B", "-.-." => "C", "-.." => "D",
+            "." => "E", "..-." => "F", "--." => "G", "...." => "H",
+            ".." => "I", ".---" => "J", "-.-" => "K", ".-.." => "L",
+            "--" => "M", "-." => "N", "---" => "O", ".--." => "P",
+            "--.-" => "Q", ".-." => "R", "..." => "S", "-" => "T",
+            "..-" => "U", "...-" => "V", ".--" => "W", "-..-" => "X",
+            "-.--" => "Y", "--.." => "Z",
+            // Numbers
+            "-----" => "0", ".----" => "1", "..---" => "2", "...--" => "3",
+            "....-" => "4", "....." => "5", "-...." => "6", "--..." => "7",
+            "---.." => "8", "----." => "9",
+            // Punctuation
+            ".-.-.-" => ".", "--..--" => ",", "..--.." => "?", ".----." => "'",
+            "-.-.--" => "!", "-..-." => "/", "-.--." => "(", "-.--.-" => ")",
+            ".-..." => "&", "---..." => ":", "-.-.-." => ";", "-...-" => "=",
+            ".-.-." => "+", "-....-" => "-", "..--.-" => "_", ".-..-." => "\"",
+            "...-..-" => "$", ".--.-." => "@",
+            // Prosigns (special multi-character sequences)
+            "-..-.-" => "<BK>",  // Break (pause in transmission)
+            ".-.-.." => "<AR>",  // End of message
+            // NOTE: <BT> uses same pattern as "=" (-...-), so it decodes as "="
+            "...-.-" => "<SK>",  // End of contact/silent key
+            _ => "?",
+        }.to_string()
     }
 }
 
@@ -187,8 +195,8 @@ impl PaddleDecoderApp {
 
 impl eframe::App for PaddleDecoderApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if let Some(ch) = self.decoder.lock().unwrap().check_timeout() {
-            self.state.lock().unwrap().decoded_text.push(ch);
+        if let Some(decoded_str) = self.decoder.lock().unwrap().check_timeout() {
+            self.state.lock().unwrap().decoded_text.push_str(&decoded_str);
         }
         
         {

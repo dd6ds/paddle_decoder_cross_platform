@@ -23,15 +23,14 @@ Debian Linux / Linux Mint
 
 /etc/udev/rules.d/49-digispark.rules 
 
-```
+`
 # Digispark ATtiny85
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="0753", MODE:="0666"
 KERNEL=="ttyACM*", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="0753", MODE:="0666", ENV{ID_MM_DEVICE_IGNORE}="1"
 
 # Digispark ATtiny167
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="0753", MODE:="0666"
-
-```
+`
 
 
 ## 📦 Quick Start by Platform
@@ -208,6 +207,16 @@ I ..    R .-.
 ,  --..--   !  -.-.--
 /  -..-.    @  .--.-.
 ```
+
+### **Prosigns (Special Sequences):**
+```
+<BK> -..-.-   Break (pause in transmission)
+<AR> .-.-.    End of message
+<BT> -...-    Break text / new paragraph (same as "=")
+<SK> ...-.-   End of contact / Silent Key
+```
+**Note:** Prosigns are sent without gaps between the elements (as one continuous sequence).  
+**Note:** `<BT>` and `=` share the same Morse pattern (`-...-`), so the decoder shows `=` for this pattern.
 
 ---
 
