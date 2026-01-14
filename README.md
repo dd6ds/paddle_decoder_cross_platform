@@ -30,7 +30,8 @@ KERNEL=="ttyACM*", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="0753", MODE:="066
 
 # Digispark ATtiny167
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="0753", MODE:="0666"
-``
+
+```
 
 
 ## 📦 Quick Start by Platform
