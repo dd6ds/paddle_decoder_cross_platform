@@ -1,0 +1,20 @@
+[package]
+name = "paddle_decoder"
+version = "1.0.0"
+edition = "2021"
+authors = ["Amateur Radio Community"]
+description = "Cross-platform Morse code paddle decoder with GUI"
+
+[dependencies]
+eframe = "0.24"
+egui = "0.24"
+midir = "0.9"
+rodio = "0.17"
+rand = "0.8"
+winapi = { version = "0.3", features = ["winuser", "windef", "shellapi", "wincon"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

@@ -1,0 +1,204 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Compiled binaries
+paddle_decoder
+paddle_decoder_linux_amd64
+paddle_decoder_*.exe
+paddle_decoder_*_macOS
+*.exe
+*.out
+*.app
+
+# Release builds
+/release/*.zip
+/release/paddle_decoder*
+
+# Rust incremental compilation
+**/*.rs.bk
+*.pdb
+
+# OS-specific files
+## macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+## Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+## Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# IDE and Editor files
+## VSCode
+.vscode/
+*.code-workspace
+.history/
+
+## IntelliJ IDEA / CLion / RustRover
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.idea_modules/
+
+## Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+Sessionx.vim
+.netrwhist
+*~
+tags
+[._]*.un~
+
+## Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+## Sublime Text
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+*.sublime-workspace
+*.sublime-project
+sftp-config.json
+Package Control.last-run
+Package Control.ca-list
+Package Control.ca-bundle
+Package Control.system-ca-bundle
+Package Control.cache/
+Package Control.ca-certs/
+Package Control.merged-ca-bundle
+Package Control.user-ca-bundle
+oscrypto-ca-bundle.crt
+bh_unicode_properties.cache
+GitHub.sublime-settings
+
+## Rust Analyzer
+rust-project.json
+
+# Build scripts output
+*.log
+build.log
+
+# Testing and coverage
+*.profraw
+*.profdata
+lcov.info
+coverage/
+
+# Backup files
+*.bak
+*.swp
+*.swo
+*~.nib
+*.orig
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+.temp/
+
+# Documentation build
+book/
+
+# Cross-compilation tools (optional - uncomment if you don't want to track)
+# .cargo/
+# .intentionally-empty-file.o
+
+# Audio/MIDI test files (if any)
+*.wav
+*.mp3
+*.mid
+*.midi
+
+# Core dumps
+core
+core.*
+
+# Python (if used for build scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+ENV/
+
+# Node (if used for any tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local configuration
+.env
+.env.local
+.env.*.local
+config.local.*
+
+# Database files (if any testing)
+*.db
+*.sqlite
+*.sqlite3
+
+# Certificates and keys (security)
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# Large files / Archives (optional)
+*.tar.gz
+*.zip
+*.7z
+*.rar
+
+# User-specific settings
+.user.ini
+user_settings.json
