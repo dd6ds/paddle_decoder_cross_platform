@@ -7,11 +7,16 @@ use std::thread;
 pub struct MorsePlayer {
     morse_map: HashMap<char, &'static str>,
     frequency: f32,
-    wpm: u32,
+    char_wpm: u32,        // Character speed (actual morse element speed)
+    effective_wpm: u32,   // Effective speed (with Farnsworth spacing)
 }
 
 impl MorsePlayer {
-    pub fn new(frequency: f32, wpm: u32) -> Self {
+    pub fn new(frequency: f32, char_wpm: u32) -> Self {
+        Self::new_with_farnsworth(frequency, char_wpm, char_wpm)
+    }
+    
+    pub fn new_with_farnsworth(frequency: f32, char_wpm: u32, effective_wpm: u32) -> Self {
         let mut morse_map = HashMap::new();
         
         // Letters
@@ -63,7 +68,8 @@ impl MorsePlayer {
         MorsePlayer { 
             morse_map,
             frequency,
-            wpm,
+            char_wpm: char_wpm.max(5),
+            effective_wpm: effective_wpm.max(5).min(char_wpm), // Effective can't be faster than character
         }
     }
     
@@ -92,7 +98,37 @@ impl MorsePlayer {
     }
     
     pub fn play_morse(&self, sink: &Sink, text: &str) {
-        let dit_ms = 1200 / self.wpm.max(1);
+        // Character timing (dit/dah speed)
+        let dit_ms = 1200 / self.char_wpm.max(1);
+        
+        // Calculate Farnsworth spacing if effective speed is slower
+        let (letter_space_ms, word_space_ms) = if self.effective_wpm < self.char_wpm {
+            // Farnsworth timing: keep characters fast, extend spacing
+            // PARIS has 31 element dits and 19 spacing dits (4 letter spaces @ 3 + 1 word space @ 7)
+            
+            // Time for character elements at character speed
+            let char_time_per_paris = 31.0 * 1.2 / self.char_wpm as f32;  // seconds
+            
+            // Total time per PARIS at effective speed
+            let total_time_per_paris = 60.0 / self.effective_wpm as f32;  // seconds
+            
+            // Extra time that needs to be distributed across spacing
+            let extra_spacing_time = total_time_per_paris - char_time_per_paris;  // seconds
+            
+            // Distribute extra time proportionally across 19 spacing units in PARIS
+            let extra_per_spacing_unit = extra_spacing_time / 19.0;  // seconds per unit
+            
+            // Calculate actual spacing times
+            // Standard letter space = 3 dits, word space = 7 dits
+            let letter_space = (3.0 * dit_ms as f32 / 1000.0 + extra_per_spacing_unit * 3.0) * 1000.0;
+            let word_space = (7.0 * dit_ms as f32 / 1000.0 + extra_per_spacing_unit * 7.0) * 1000.0;
+            
+            (letter_space as u32, word_space as u32)
+        } else {
+            // Standard timing (3 dit for letter, 7 dit for word)
+            (dit_ms * 3, dit_ms * 7)
+        };
+        
         let elements = self.text_to_morse(text);
         
         for element in elements {
@@ -116,10 +152,18 @@ impl MorsePlayer {
                     thread::sleep(Duration::from_millis(dit_ms as u64));
                 }
                 MorseElement::LetterSpace => {
-                    thread::sleep(Duration::from_millis((dit_ms * 2) as u64));
+                    // Already have 1 dit space after element, add remaining
+                    let remaining = letter_space_ms.saturating_sub(dit_ms);
+                    if remaining > 0 {
+                        thread::sleep(Duration::from_millis(remaining as u64));
+                    }
                 }
                 MorseElement::WordSpace => {
-                    thread::sleep(Duration::from_millis((dit_ms * 6) as u64));
+                    // Already have 1 dit space after element, add remaining
+                    let remaining = word_space_ms.saturating_sub(dit_ms);
+                    if remaining > 0 {
+                        thread::sleep(Duration::from_millis(remaining as u64));
+                    }
                 }
             }
         }
