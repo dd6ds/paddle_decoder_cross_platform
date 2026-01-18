@@ -1204,6 +1204,8 @@ fn automatic_keyer_thread(
     decoder: Arc<Mutex<MorseDecoder>>,
     sink: Arc<Mutex<Sink>>,
 ) {
+    let mut last_element_was_dit = false;
+    
     loop {
         thread::sleep(Duration::from_millis(10));
         
@@ -1212,36 +1214,16 @@ fn automatic_keyer_thread(
             (s.left_pressed, s.right_pressed, s.wpm, s.frequency)
         };
         
-        if left_pressed || right_pressed {
-            let dit_ms = 1200 / wpm.max(1);
-            let dah_ms = dit_ms * 3;
-            
-            if left_pressed {
-                // Generate DIT (left paddle = dit)
-                decoder.lock().unwrap().add_element(true);
-                
-                // Play DIT tone
-                {
-                    let snk = sink.lock().unwrap();
-                    snk.stop();
-                    let tone = ToneGenerator::new(frequency as f32);
-                    snk.append(tone);
-                    snk.play();
-                }
-                
-                thread::sleep(Duration::from_millis(dit_ms as u64));
-                
-                // Stop tone
-                sink.lock().unwrap().stop();
-                
-                // Element space (1 dit length pause)
-                thread::sleep(Duration::from_millis(dit_ms as u64));
-                
-            } else if right_pressed {
-                // Generate DAH (right paddle = dah)
+        let dit_ms = 1200 / wpm.max(1);
+        let dah_ms = dit_ms * 3;
+        
+        // Iambic keyer logic - handles squeeze keying
+        if left_pressed && right_pressed {
+            // Both paddles pressed (squeeze) - alternate between dit and dah
+            if last_element_was_dit {
+                // Last was dit, now send dah
                 decoder.lock().unwrap().add_element(false);
                 
-                // Play DAH tone
                 {
                     let snk = sink.lock().unwrap();
                     snk.stop();
@@ -1251,13 +1233,62 @@ fn automatic_keyer_thread(
                 }
                 
                 thread::sleep(Duration::from_millis(dah_ms as u64));
-                
-                // Stop tone
                 sink.lock().unwrap().stop();
-                
-                // Element space (1 dit length pause)
                 thread::sleep(Duration::from_millis(dit_ms as u64));
+                
+                last_element_was_dit = false;
+            } else {
+                // Last was dah (or start), now send dit
+                decoder.lock().unwrap().add_element(true);
+                
+                {
+                    let snk = sink.lock().unwrap();
+                    snk.stop();
+                    let tone = ToneGenerator::new(frequency as f32);
+                    snk.append(tone);
+                    snk.play();
+                }
+                
+                thread::sleep(Duration::from_millis(dit_ms as u64));
+                sink.lock().unwrap().stop();
+                thread::sleep(Duration::from_millis(dit_ms as u64));
+                
+                last_element_was_dit = true;
             }
+        } else if left_pressed {
+            // Only left paddle (DIT)
+            decoder.lock().unwrap().add_element(true);
+            
+            {
+                let snk = sink.lock().unwrap();
+                snk.stop();
+                let tone = ToneGenerator::new(frequency as f32);
+                snk.append(tone);
+                snk.play();
+            }
+            
+            thread::sleep(Duration::from_millis(dit_ms as u64));
+            sink.lock().unwrap().stop();
+            thread::sleep(Duration::from_millis(dit_ms as u64));
+            
+            last_element_was_dit = true;
+        } else if right_pressed {
+            // Only right paddle (DAH)
+            decoder.lock().unwrap().add_element(false);
+            
+            {
+                let snk = sink.lock().unwrap();
+                snk.stop();
+                let tone = ToneGenerator::new(frequency as f32);
+                snk.append(tone);
+                snk.play();
+            }
+            
+            thread::sleep(Duration::from_millis(dah_ms as u64));
+            sink.lock().unwrap().stop();
+            thread::sleep(Duration::from_millis(dit_ms as u64));
+            
+            last_element_was_dit = false;
         }
     }
 }
