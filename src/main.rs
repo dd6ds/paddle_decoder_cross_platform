@@ -6,9 +6,9 @@ use std::time::{Duration, Instant};
 use std::thread;
 
 mod cw_academy_training;
-use cw_academy_training::{SessionNumber, PracticeType, get_session, get_all_sessions, 
-                          get_practice_types, get_session_description, BlockSize, 
-                          get_block_sizes, generate_random_block};
+use cw_academy_training::{SessionNumber, PracticeType, get_cumulative_session, 
+                          get_all_sessions, get_practice_types, get_session_description, 
+                          BlockSize, get_block_sizes, generate_random_block};
 
 mod morse_player;
 use morse_player::{MorsePlayer, MorseElement};
@@ -216,6 +216,8 @@ struct AppState {
     frequency: u32,
     // Training mode
     training_mode: bool,
+    show_training_window: bool,
+    training_session_active: bool,  // Track if training session is started
     current_session: SessionNumber,
     current_practice_type: PracticeType,
     current_training_text: String,
@@ -257,6 +259,8 @@ impl Default for AppState {
             farnsworth_wpm: 15,  // Default Farnsworth spacing
             frequency: 600,
             training_mode: false,
+            show_training_window: false,
+            training_session_active: false,  // Not started by default
             current_session: SessionNumber::Session1,
             current_practice_type: PracticeType::Characters,
             current_training_text: String::new(),
@@ -314,7 +318,7 @@ impl PaddleDecoderApp {
                 state.block_size
             )
         } else {
-            let session = get_session(state.current_session);
+            let session = get_cumulative_session(state.current_session);
             session.get_random_item(state.current_practice_type)
                 .map(|item| item.to_string())
                 .unwrap_or_default()
@@ -359,6 +363,592 @@ impl PaddleDecoderApp {
             _stream_handle: stream_handle,
             playback_sink,
         }
+    }
+    
+    fn render_training_window(&mut self, ui: &mut egui::Ui) {
+        ui.heading("🎓 CW Academy Training Mode");
+        ui.add_space(10.0);
+        
+        let mut state = self.state.lock().unwrap();
+        
+        // Configuration Section (always visible)
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("Training Configuration").strong().size(16.0));
+            ui.add_space(5.0);
+            
+            // Session Selection
+            ui.horizontal(|ui| {
+                ui.label("Session:");
+                egui::ComboBox::from_label("")
+                    .selected_text(get_session_description(state.current_session))
+                    .show_ui(ui, |ui| {
+                        for session in get_all_sessions() {
+                            if ui.selectable_value(&mut state.current_session, session, 
+                                                   get_session_description(session)).clicked() {
+                                if state.training_session_active {
+                                    let sess = get_cumulative_session(state.current_session);
+                                    if let Some(item) = sess.get_random_item(state.current_practice_type) {
+                                        state.current_training_text = item.to_string();
+                                    }
+                                }
+                            }
+                        }
+                    });
+            });
+            
+            // Practice Type Selection
+            ui.horizontal(|ui| {
+                ui.label("Practice Type:");
+                egui::ComboBox::from_label(" ")
+                    .selected_text(state.current_practice_type.as_str())
+                    .show_ui(ui, |ui| {
+                        for practice_type in get_practice_types() {
+                            if ui.selectable_value(&mut state.current_practice_type, practice_type,
+                                                   practice_type.as_str()).clicked() {
+                                if state.training_session_active {
+                                    let session = get_cumulative_session(state.current_session);
+                                    if let Some(item) = session.get_random_item(state.current_practice_type) {
+                                        state.current_training_text = item.to_string();
+                                    }
+                                }
+                            }
+                        }
+                    });
+            });
+            
+            ui.add_space(5.0);
+            
+            // Random Blocks Mode Toggle
+            ui.horizontal(|ui| {
+                if ui.checkbox(&mut state.random_blocks_mode, "🎲 Random Blocks Mode").changed() {
+                    if state.random_blocks_mode && state.training_session_active {
+                        // Generate first random block
+                        state.current_training_text = generate_random_block(
+                            state.block_from_session,
+                            state.block_to_session,
+                            state.block_size
+                        );
+                    }
+                }
+            });
+            
+            if state.random_blocks_mode {
+                ui.add_space(5.0);
+                
+                ui.group(|ui| {
+                    ui.label(egui::RichText::new("Random Blocks Settings").strong());
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("From Session:");
+                        egui::ComboBox::from_label("")
+                            .selected_text(format!("{}", state.block_from_session.as_number()))
+                            .show_ui(ui, |ui| {
+                                for session in get_all_sessions() {
+                                    if ui.selectable_value(
+                                        &mut state.block_from_session,
+                                        session,
+                                        format!("{}", session.as_number())
+                                    ).clicked() {
+                                        if state.training_session_active {
+                                            // Regenerate block
+                                            state.current_training_text = generate_random_block(
+                                                state.block_from_session,
+                                                state.block_to_session,
+                                                state.block_size
+                                            );
+                                        }
+                                    }
+                                }
+                            });
+                        
+                        ui.label("To Session:");
+                        egui::ComboBox::from_label(" ")
+                            .selected_text(format!("{}", state.block_to_session.as_number()))
+                            .show_ui(ui, |ui| {
+                                for session in get_all_sessions() {
+                                    if ui.selectable_value(
+                                        &mut state.block_to_session,
+                                        session,
+                                        format!("{}", session.as_number())
+                                    ).clicked() {
+                                        if state.training_session_active {
+                                            // Regenerate block
+                                            state.current_training_text = generate_random_block(
+                                                state.block_from_session,
+                                                state.block_to_session,
+                                                state.block_size
+                                            );
+                                        }
+                                    }
+                                }
+                            });
+                    });
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("Block Size:");
+                        egui::ComboBox::from_label("  ")
+                            .selected_text(state.block_size.as_str())
+                            .show_ui(ui, |ui| {
+                                for size in get_block_sizes() {
+                                    if ui.selectable_value(
+                                        &mut state.block_size,
+                                        size,
+                                        size.as_str()
+                                    ).clicked() {
+                                        if state.training_session_active {
+                                            // Regenerate block
+                                            state.current_training_text = generate_random_block(
+                                                state.block_from_session,
+                                                state.block_to_session,
+                                                state.block_size
+                                            );
+                                        }
+                                    }
+                                }
+                            });
+                    });
+                    
+                    ui.add_space(5.0);
+                    ui.label(egui::RichText::new(format!(
+                        "📚 Training characters from Session {} to {}",
+                        state.block_from_session.as_number(),
+                        state.block_to_session.as_number()
+                    ))
+                    .italics()
+                    .size(11.0)
+                    .color(egui::Color32::LIGHT_BLUE));
+                });
+            }
+            
+            ui.add_space(5.0);
+            
+            // Mode Toggle: Sending Practice vs Listening Practice
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Training Mode:").strong());
+                if ui.selectable_label(!state.listening_mode, "📝 Sending Practice").clicked() {
+                    state.listening_mode = false;
+                    if state.training_session_active {
+                        state.show_result = false;
+                        state.show_answer = false;
+                        state.decoded_text.clear();
+                    }
+                }
+                if ui.selectable_label(state.listening_mode, "🎧 Listening Practice").clicked() {
+                    state.listening_mode = true;
+                    if state.training_session_active {
+                        state.show_result = false;
+                        state.show_answer = false;
+                        state.attempt_count = 0;
+                        state.decoded_text.clear();
+                    }
+                }
+            });
+        });
+        
+        ui.add_space(10.0);
+        ui.separator();
+        ui.add_space(10.0);
+        
+        // Start/Stop Button
+        ui.vertical_centered(|ui| {
+            let button_text = if state.training_session_active {
+                "⏹ Stop Training Session"
+            } else {
+                "▶ Start Training Session"
+            };
+            
+            let button_color = if state.training_session_active {
+                egui::Color32::from_rgb(255, 100, 100)
+            } else {
+                egui::Color32::from_rgb(100, 255, 100)
+            };
+            
+            if ui.button(egui::RichText::new(button_text)
+                .size(20.0)
+                .color(button_color)).clicked() {
+                
+                state.training_session_active = !state.training_session_active;
+                
+                if state.training_session_active {
+                    // Starting session - initialize first item
+                    state.training_mode = true;
+                    state.show_result = false;
+                    state.show_answer = false;
+                    state.decoded_text.clear();
+                    state.correct_answer.clear();
+                    state.attempt_count = 0;
+                    state.timeout_start = None;
+                    state.result_display_start = None;
+                    
+                    if state.random_blocks_mode {
+                        state.current_training_text = generate_random_block(
+                            state.block_from_session,
+                            state.block_to_session,
+                            state.block_size
+                        );
+                    } else {
+                        let session = get_cumulative_session(state.current_session);
+                        if let Some(item) = session.get_random_item(state.current_practice_type) {
+                            state.current_training_text = item.to_string();
+                        }
+                    }
+                } else {
+                    // Stopping session - reset state
+                    state.training_mode = false;
+                    state.show_result = false;
+                    state.show_answer = false;
+                    state.decoded_text.clear();
+                    state.correct_answer.clear();
+                    state.timeout_start = None;
+                    state.result_display_start = None;
+                }
+            }
+        });
+        
+        ui.add_space(10.0);
+        
+        // Only show training content if session is active
+        if !state.training_session_active {
+            ui.vertical_centered(|ui| {
+                ui.label(egui::RichText::new("Configure your training settings above, then click Start!")
+                    .italics()
+                    .size(14.0)
+                    .color(egui::Color32::LIGHT_GRAY));
+            });
+            return;
+        }
+        
+        ui.separator();
+        ui.add_space(10.0);
+            
+            if !state.listening_mode {
+                // SENDING PRACTICE MODE
+                ui.group(|ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.heading("Practice This:");
+                        ui.add_space(5.0);
+                        ui.label(egui::RichText::new(&state.current_training_text)
+                            .size(32.0)
+                            .monospace()
+                            .color(egui::Color32::YELLOW));
+                        ui.add_space(5.0);
+                        
+                        if ui.button(egui::RichText::new("Next Item")
+                            .size(16.0)).clicked() {
+                            if state.random_blocks_mode {
+                                state.current_training_text = generate_random_block(
+                                    state.block_from_session,
+                                    state.block_to_session,
+                                    state.block_size
+                                );
+                            } else {
+                                let session = get_cumulative_session(state.current_session);
+                                if let Some(item) = session.get_random_item(state.current_practice_type) {
+                                    state.current_training_text = item.to_string();
+                                }
+                            }
+                        }
+                    });
+                });
+                
+                ui.add_space(3.0);
+                ui.label(egui::RichText::new("💡 Send the text with your paddle, then click Next")
+                    .italics()
+                    .size(11.0)
+                    .color(egui::Color32::LIGHT_GRAY));
+                    
+            } else {
+                // LISTENING PRACTICE MODE
+                ui.group(|ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.heading("🎧 Listen and Decode");
+                        ui.add_space(5.0);
+                        
+                        // Statistics display - compact with Morse input display
+                        ui.horizontal(|ui| {
+                            // Left side - Statistics
+                            ui.label(egui::RichText::new(format!("✓ {}", state.correct_count))
+                                .size(14.0)
+                                .color(egui::Color32::from_rgb(0, 255, 0)));
+                            ui.add_space(10.0);
+                            ui.label(egui::RichText::new(format!("✗ {}", state.wrong_count))
+                                .size(14.0)
+                                .color(egui::Color32::from_rgb(255, 100, 100)));
+                            ui.add_space(10.0);
+                            if state.correct_count + state.wrong_count > 0 {
+                                let accuracy = (state.correct_count as f32 / (state.correct_count + state.wrong_count) as f32) * 100.0;
+                                ui.label(egui::RichText::new(format!("📊 {:.1}%", accuracy))
+                                    .size(14.0)
+                                    .color(egui::Color32::from_rgb(100, 200, 255)));
+                            }
+                            if ui.button("Reset").clicked() {
+                                state.correct_count = 0;
+                                state.wrong_count = 0;
+                                state.wrong_answers.clear();
+                            }
+                            
+                            // Add flexible space to push next section to the right
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                // Right side - User's Morse input display
+                                if !state.current_sequence.is_empty() || !state.decoded_text.is_empty() {
+                                    ui.vertical(|ui| {
+                                        // Show current sequence being built
+                                        if !state.current_sequence.is_empty() {
+                                            ui.horizontal(|ui| {
+                                                ui.label(egui::RichText::new("⚡")
+                                                    .size(12.0)
+                                                    .color(egui::Color32::YELLOW));
+                                                ui.label(egui::RichText::new(&state.current_sequence)
+                                                    .size(16.0)
+                                                    .monospace()
+                                                    .color(egui::Color32::LIGHT_BLUE));
+                                            });
+                                        }
+                                        // Show decoded text
+                                        if !state.decoded_text.is_empty() {
+                                            ui.horizontal(|ui| {
+                                                ui.label(egui::RichText::new("📝")
+                                                    .size(12.0)
+                                                    .color(egui::Color32::GREEN));
+                                                ui.label(egui::RichText::new(&state.decoded_text)
+                                                    .size(16.0)
+                                                    .monospace()
+                                                    .color(egui::Color32::LIGHT_GREEN));
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                        });
+                        
+                        ui.add_space(5.0);
+                        ui.separator();
+                        ui.add_space(5.0);
+                        
+                        // RESULT AND ANSWER DISPLAY - AT TOP FOR VISIBILITY
+                        if !state.correct_answer.is_empty() {
+                            // Show result prominently
+                            if state.show_result {
+                                ui.group(|ui| {
+                                    ui.vertical_centered(|ui| {
+                                        if state.result_correct {
+                                            ui.label(egui::RichText::new("✓ RIGHT!")
+                                                .size(32.0)
+                                                .color(egui::Color32::from_rgb(0, 255, 0)));
+                                        } else {
+                                            ui.label(egui::RichText::new("✗ WRONG")
+                                                .size(32.0)
+                                                .color(egui::Color32::from_rgb(255, 0, 0)));
+                                        }
+                                    });
+                                });
+                                ui.add_space(5.0);
+                            }
+                            
+                            // Show answer after wrong attempts - ALWAYS VISIBLE
+                            if state.show_answer {
+                                ui.group(|ui| {
+                                    ui.vertical_centered(|ui| {
+                                        ui.label(egui::RichText::new("Correct answer:")
+                                            .size(12.0)
+                                            .color(egui::Color32::LIGHT_GRAY));
+                                        ui.label(egui::RichText::new(&state.correct_answer)
+                                            .size(28.0)
+                                            .strong()
+                                            .monospace()
+                                            .color(egui::Color32::YELLOW));
+                                    });
+                                });
+                                ui.add_space(5.0);
+                            }
+                            
+                            // Show countdown if auto-moving to next
+                            if state.timeout_enabled && state.show_result {
+                                if let Some(display_start) = state.result_display_start {
+                                    let elapsed = display_start.elapsed().as_secs();
+                                    let remaining = state.result_display_duration.saturating_sub(elapsed);
+                                    if remaining > 0 {
+                                        ui.label(egui::RichText::new(format!("⏱ Next in {}s", remaining))
+                                            .size(12.0)
+                                            .color(egui::Color32::from_rgb(150, 150, 150)));
+                                    }
+                                }
+                            }
+                            
+                            ui.add_space(5.0);
+                            ui.separator();
+                            ui.add_space(5.0);
+                        }
+                        
+                        // Timeout configuration - compact
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut state.timeout_enabled, "⏱ Auto-Timeout");
+                            if state.timeout_enabled {
+                                ui.add(egui::Slider::new(&mut state.timeout_seconds, 10..=120)
+                                    .suffix("s"));
+                                
+                                // Show time remaining inline
+                                if let Some(start_time) = state.timeout_start {
+                                    if !state.correct_answer.is_empty() && !state.show_result {
+                                        let elapsed = start_time.elapsed().as_secs();
+                                        let remaining = state.timeout_seconds.saturating_sub(elapsed as u32);
+                                        let color = if remaining <= 5 {
+                                            egui::Color32::from_rgb(255, 0, 0)
+                                        } else if remaining <= 10 {
+                                            egui::Color32::from_rgb(255, 165, 0)
+                                        } else {
+                                            egui::Color32::from_rgb(100, 200, 255)
+                                        };
+                                        ui.label(egui::RichText::new(format!("({}s)", remaining))
+                                            .color(color));
+                                    }
+                                }
+                            }
+                        });
+                        
+                        ui.add_space(5.0);
+                        
+                        let sink_clone = Arc::clone(&self.playback_sink);
+                        let wpm = state.wpm;
+                        let farnsworth = state.farnsworth_wpm;
+                        let freq = state.frequency;
+                        let training_text = state.current_training_text.clone();
+                        
+                        if ui.button(egui::RichText::new("▶ Play Morse Code")
+                            .size(18.0)
+                            .color(egui::Color32::LIGHT_BLUE)).clicked() {
+                            
+                            state.correct_answer = training_text.clone();
+                            state.decoded_text.clear();
+                            state.show_result = false;
+                            state.show_answer = false;
+                            state.attempt_count = 0;
+                            
+                            // Start timeout timer if enabled
+                            if state.timeout_enabled {
+                                state.timeout_start = Some(Instant::now());
+                            }
+                            
+                            // Play morse in background thread
+                            drop(state); // Release lock before spawning thread
+                            thread::spawn(move || {
+                                let player = MorsePlayer::new_with_farnsworth(freq as f32, wpm, farnsworth);
+                                let sink = sink_clone.lock().unwrap();
+                                player.play_morse(&sink, &training_text);
+                            });
+                            return;
+                        }
+                        
+                        ui.add_space(5.0);
+                        
+                        if !state.correct_answer.is_empty() {
+                            ui.label(egui::RichText::new("Send what you heard:")
+                                .size(12.0)
+                                .italics());
+                            ui.add_space(5.0);
+                            
+                            if ui.button(egui::RichText::new("Check Answer")
+                                .size(16.0)).clicked() {
+                                
+                                let decoded = state.decoded_text.trim().to_uppercase();
+                                let correct = state.correct_answer.trim().to_uppercase();
+                                
+                                if decoded == correct {
+                                    state.result_correct = true;
+                                    state.show_result = true;
+                                    state.show_answer = false;
+                                    state.correct_count += 1;
+                                    state.timeout_start = None; // Stop timeout
+                                    state.result_display_start = None; // Manual check, no auto-next
+                                    
+                                    // Remove from wrong answers if it was there
+                                    state.wrong_answers.retain(|item| item.trim().to_uppercase() != correct);
+                                } else {
+                                    state.result_correct = false;
+                                    state.show_result = true;
+                                    state.attempt_count += 1;
+                                    
+                                    if state.attempt_count >= 2 {
+                                        state.show_answer = true;
+                                        state.wrong_count += 1;
+                                        state.timeout_start = None; // Stop timeout
+                                        state.result_display_start = None; // Manual check, no auto-next
+                                        
+                                        // Add to wrong answers list if not already there
+                                        let correct_ans = state.correct_answer.clone();
+                                        if !state.wrong_answers.contains(&correct_ans) {
+                                            state.wrong_answers.push(correct_ans);
+                                        }
+                                    } else {
+                                        // Play again
+                                        let sink_clone = Arc::clone(&self.playback_sink);
+                                        let training_text = state.current_training_text.clone();
+                                        let wpm_local = wpm;
+                                        let farnsworth_local = farnsworth;
+                                        let freq_local = freq;
+                                        
+                                        // Restart timeout timer
+                                        if state.timeout_enabled {
+                                            state.timeout_start = Some(Instant::now());
+                                        }
+                                        
+                                        drop(state); // Release lock before spawning thread
+                                        thread::spawn(move || {
+                                            thread::sleep(Duration::from_millis(1000));
+                                            let player = MorsePlayer::new_with_farnsworth(freq_local as f32, wpm_local, farnsworth_local);
+                                            let sink = sink_clone.lock().unwrap();
+                                            player.play_morse(&sink, &training_text);
+                                        });
+                                        return;
+                                    }
+                                }
+                            }
+                            
+                            ui.add_space(5.0);
+                            
+                            if ui.button(egui::RichText::new("Next Item")
+                                .size(16.0)).clicked() {
+                                // Generate next item using helper method
+                                let next_item = Self::get_next_training_item(&mut state);
+                                state.current_training_text = next_item.clone();
+                                
+                                state.correct_answer.clear();
+                                state.decoded_text.clear();
+                                state.show_result = false;
+                                state.show_answer = false;
+                                state.attempt_count = 0;
+                                state.timeout_start = None;
+                                state.result_display_start = None;
+                                
+                                // Auto-play if timeout is enabled
+                                if state.timeout_enabled {
+                                    state.correct_answer = next_item.clone();
+                                    state.timeout_start = Some(Instant::now());
+                                    
+                                    let sink_clone = Arc::clone(&self.playback_sink);
+                                    let wpm_local = state.wpm;
+                                    let farnsworth_local = state.farnsworth_wpm;
+                                    let freq_local = state.frequency;
+                                    
+                                    drop(state); // Release lock before spawning thread
+                                    thread::spawn(move || {
+                                        let player = MorsePlayer::new_with_farnsworth(freq_local as f32, wpm_local, farnsworth_local);
+                                        let sink = sink_clone.lock().unwrap();
+                                        player.play_morse(&sink, &next_item);
+                                    });
+                                    return;
+                                }
+                            }
+                        }
+                    });
+                });
+                
+                ui.add_space(3.0);
+                ui.label(egui::RichText::new("💡 Play morse, then decode with your paddle")
+                    .italics()
+                    .size(11.0)
+                    .color(egui::Color32::LIGHT_GRAY));
+            }
     }
 }
 
@@ -514,13 +1104,13 @@ impl eframe::App for PaddleDecoderApp {
                     egui::Color32::DARK_GRAY
                 };
                 
-                ui.label(egui::RichText::new("LEFT (Dit)")
+                ui.label(egui::RichText::new("LEFT (Dah)")
                     .size(20.0)
                     .color(left_color));
                 
                 ui.add_space(20.0);
                 
-                ui.label(egui::RichText::new("RIGHT (Dah)")
+                ui.label(egui::RichText::new("RIGHT (Dit)")
                     .size(20.0)
                     .color(right_color));
             });
@@ -579,472 +1169,34 @@ impl eframe::App for PaddleDecoderApp {
             ui.separator();
             ui.add_space(10.0);
             
-            // Training Mode Section
-            ui.heading("🎓 CW Academy Training Mode");
-            
+            // Button to open Training Window
             ui.horizontal(|ui| {
-                if ui.button(if state.training_mode { "Disable Training" } else { "Enable Training" }).clicked() {
-                    state.training_mode = !state.training_mode;
-                    state.listening_mode = false;
-                    state.show_result = false;
-                    state.show_answer = false;
-                    if state.training_mode {
-                        let session = get_session(state.current_session);
-                        if let Some(item) = session.get_random_item(state.current_practice_type) {
-                            state.current_training_text = item.to_string();
-                        }
-                    }
+                if ui.button(egui::RichText::new("🎓 Open Training Window")
+                    .size(18.0)
+                    .color(egui::Color32::LIGHT_BLUE)).clicked() {
+                    state.show_training_window = true;
+                    state.training_mode = true;
                 }
             });
             
-            if state.training_mode {
-                ui.add_space(10.0);
-                
-                // Session Selection
-                ui.horizontal(|ui| {
-                    ui.label("Session:");
-                    egui::ComboBox::from_label("")
-                        .selected_text(get_session_description(state.current_session))
-                        .show_ui(ui, |ui| {
-                            for session in get_all_sessions() {
-                                if ui.selectable_value(&mut state.current_session, session, 
-                                                       get_session_description(session)).clicked() {
-                                    let sess = get_session(state.current_session);
-                                    if let Some(item) = sess.get_random_item(state.current_practice_type) {
-                                        state.current_training_text = item.to_string();
-                                    }
-                                    state.listening_mode = false;
-                                    state.show_result = false;
-                                    state.show_answer = false;
-                                }
-                            }
-                        });
-                });
-                
-                // Practice Type Selection
-                ui.horizontal(|ui| {
-                    ui.label("Practice Type:");
-                    egui::ComboBox::from_label(" ")
-                        .selected_text(state.current_practice_type.as_str())
-                        .show_ui(ui, |ui| {
-                            for practice_type in get_practice_types() {
-                                if ui.selectable_value(&mut state.current_practice_type, practice_type,
-                                                       practice_type.as_str()).clicked() {
-                                    let session = get_session(state.current_session);
-                                    if let Some(item) = session.get_random_item(state.current_practice_type) {
-                                        state.current_training_text = item.to_string();
-                                    }
-                                    state.listening_mode = false;
-                                    state.show_result = false;
-                                    state.show_answer = false;
-                                }
-                            }
-                        });
-                });
-                
-                ui.add_space(10.0);
-                
-                // Random Blocks Mode Toggle
-                ui.horizontal(|ui| {
-                    if ui.checkbox(&mut state.random_blocks_mode, "🎲 Random Blocks Mode").changed() {
-                        if state.random_blocks_mode {
-                            // Generate first random block
-                            state.current_training_text = generate_random_block(
-                                state.block_from_session,
-                                state.block_to_session,
-                                state.block_size
-                            );
-                        }
-                    }
-                });
-                
-                if state.random_blocks_mode {
-                    ui.add_space(5.0);
-                    
-                    ui.group(|ui| {
-                        ui.label(egui::RichText::new("Random Blocks Settings").strong());
-                        
-                        ui.horizontal(|ui| {
-                            ui.label("From Session:");
-                            egui::ComboBox::from_label("")
-                                .selected_text(format!("{}", state.block_from_session.as_number()))
-                                .show_ui(ui, |ui| {
-                                    for session in get_all_sessions() {
-                                        if ui.selectable_value(
-                                            &mut state.block_from_session,
-                                            session,
-                                            format!("{}", session.as_number())
-                                        ).clicked() {
-                                            // Regenerate block
-                                            state.current_training_text = generate_random_block(
-                                                state.block_from_session,
-                                                state.block_to_session,
-                                                state.block_size
-                                            );
-                                        }
-                                    }
-                                });
-                            
-                            ui.label("To Session:");
-                            egui::ComboBox::from_label(" ")
-                                .selected_text(format!("{}", state.block_to_session.as_number()))
-                                .show_ui(ui, |ui| {
-                                    for session in get_all_sessions() {
-                                        if ui.selectable_value(
-                                            &mut state.block_to_session,
-                                            session,
-                                            format!("{}", session.as_number())
-                                        ).clicked() {
-                                            // Regenerate block
-                                            state.current_training_text = generate_random_block(
-                                                state.block_from_session,
-                                                state.block_to_session,
-                                                state.block_size
-                                            );
-                                        }
-                                    }
-                                });
-                        });
-                        
-                        ui.horizontal(|ui| {
-                            ui.label("Block Size:");
-                            egui::ComboBox::from_label("  ")
-                                .selected_text(state.block_size.as_str())
-                                .show_ui(ui, |ui| {
-                                    for size in get_block_sizes() {
-                                        if ui.selectable_value(
-                                            &mut state.block_size,
-                                            size,
-                                            size.as_str()
-                                        ).clicked() {
-                                            // Regenerate block
-                                            state.current_training_text = generate_random_block(
-                                                state.block_from_session,
-                                                state.block_to_session,
-                                                state.block_size
-                                            );
-                                        }
-                                    }
-                                });
-                        });
-                        
-                        ui.add_space(5.0);
-                        ui.label(egui::RichText::new(format!(
-                            "📚 Training characters from Session {} to {}",
-                            state.block_from_session.as_number(),
-                            state.block_to_session.as_number()
-                        ))
-                        .italics()
-                        .size(11.0)
-                        .color(egui::Color32::LIGHT_BLUE));
-                    });
-                }
-                
-                ui.add_space(10.0);
-                ui.separator();
-                ui.add_space(5.0);
-                
-                // Mode Toggle: Sending Practice vs Listening Practice
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Training Mode:").strong());
-                    if ui.selectable_label(!state.listening_mode, "📝 Sending Practice").clicked() {
-                        state.listening_mode = false;
-                        state.show_result = false;
-                        state.show_answer = false;
-                    }
-                    if ui.selectable_label(state.listening_mode, "🎧 Listening Practice").clicked() {
-                        state.listening_mode = true;
-                        state.show_result = false;
-                        state.show_answer = false;
-                        state.attempt_count = 0;
-                        state.decoded_text.clear();
-                    }
-                });
-                
-                ui.add_space(10.0);
-                
-                if !state.listening_mode {
-                    // SENDING PRACTICE MODE
-                    ui.group(|ui| {
-                        ui.vertical_centered(|ui| {
-                            ui.heading("Practice This:");
-                            ui.add_space(10.0);
-                            ui.label(egui::RichText::new(&state.current_training_text)
-                                .size(32.0)
-                                .monospace()
-                                .color(egui::Color32::YELLOW));
-                            ui.add_space(10.0);
-                            
-                            if ui.button("Next Item").clicked() {
-                                if state.random_blocks_mode {
-                                    state.current_training_text = generate_random_block(
-                                        state.block_from_session,
-                                        state.block_to_session,
-                                        state.block_size
-                                    );
-                                } else {
-                                    let session = get_session(state.current_session);
-                                    if let Some(item) = session.get_random_item(state.current_practice_type) {
-                                        state.current_training_text = item.to_string();
-                                    }
-                                }
-                            }
-                        });
-                    });
-                    
-                    ui.add_space(5.0);
-                    ui.label(egui::RichText::new("💡 Send the text above using your paddle, then click 'Next Item'")
-                        .italics()
-                        .size(12.0)
-                        .color(egui::Color32::LIGHT_GRAY));
-                        
-                } else {
-                    // LISTENING PRACTICE MODE
-                    ui.group(|ui| {
-                        ui.vertical_centered(|ui| {
-                            ui.heading("🎧 Listen and Decode");
-                            ui.add_space(10.0);
-                            
-                            // Statistics display
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(format!("✓ Correct: {}", state.correct_count))
-                                    .size(16.0)
-                                    .color(egui::Color32::from_rgb(0, 255, 0)));
-                                ui.add_space(20.0);
-                                ui.label(egui::RichText::new(format!("✗ Wrong: {}", state.wrong_count))
-                                    .size(16.0)
-                                    .color(egui::Color32::from_rgb(255, 100, 100)));
-                                ui.add_space(20.0);
-                                if state.correct_count + state.wrong_count > 0 {
-                                    let accuracy = (state.correct_count as f32 / (state.correct_count + state.wrong_count) as f32) * 100.0;
-                                    ui.label(egui::RichText::new(format!("📊 {:.1}%", accuracy))
-                                        .size(16.0)
-                                        .color(egui::Color32::from_rgb(100, 200, 255)));
-                                }
-                            });
-                            
-                            ui.horizontal(|ui| {
-                                if ui.button("Reset Statistics").clicked() {
-                                    state.correct_count = 0;
-                                    state.wrong_count = 0;
-                                    state.wrong_answers.clear();
-                                }
-                            });
-                            
-                            ui.add_space(10.0);
-                            ui.separator();
-                            ui.add_space(10.0);
-                            
-                            // Timeout configuration
-                            ui.horizontal(|ui| {
-                                ui.checkbox(&mut state.timeout_enabled, "⏱ Enable Auto-Timeout");
-                                if state.timeout_enabled {
-                                    ui.label("Timeout:");
-                                    ui.add(egui::Slider::new(&mut state.timeout_seconds, 10..=120)
-                                        .suffix(" sec"));
-                                }
-                            });
-                            
-                            // Show time remaining if timeout is active
-                            if state.timeout_enabled {
-                                if let Some(start_time) = state.timeout_start {
-                                    if !state.correct_answer.is_empty() && !state.show_result {
-                                        let elapsed = start_time.elapsed().as_secs();
-                                        let remaining = state.timeout_seconds.saturating_sub(elapsed as u32);
-                                        let color = if remaining <= 5 {
-                                            egui::Color32::from_rgb(255, 0, 0)
-                                        } else if remaining <= 10 {
-                                            egui::Color32::from_rgb(255, 165, 0)
-                                        } else {
-                                            egui::Color32::from_rgb(100, 200, 255)
-                                        };
-                                        ui.label(egui::RichText::new(format!("⏱ {}s remaining", remaining))
-                                            .size(14.0)
-                                            .color(color));
-                                    }
-                                }
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            let sink_clone = Arc::clone(&self.playback_sink);
-                            let wpm = state.wpm;
-                            let farnsworth = state.farnsworth_wpm;
-                            let freq = state.frequency;
-                            let training_text = state.current_training_text.clone();
-                            
-                            if ui.button(egui::RichText::new("▶ Play Morse Code")
-                                .size(20.0)
-                                .color(egui::Color32::LIGHT_BLUE)).clicked() {
-                                
-                                state.correct_answer = training_text.clone();
-                                state.decoded_text.clear();
-                                state.show_result = false;
-                                state.show_answer = false;
-                                state.attempt_count = 0;
-                                
-                                // Start timeout timer if enabled
-                                if state.timeout_enabled {
-                                    state.timeout_start = Some(Instant::now());
-                                }
-                                
-                                // Play morse in background thread
-                                thread::spawn(move || {
-                                    let player = MorsePlayer::new_with_farnsworth(freq as f32, wpm, farnsworth);
-                                    let sink = sink_clone.lock().unwrap();
-                                    player.play_morse(&sink, &training_text);
-                                });
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            if !state.correct_answer.is_empty() {
-                                ui.label(egui::RichText::new("Now send what you heard using your paddle:")
-                                    .size(14.0)
-                                    .italics());
-                                ui.add_space(10.0);
-                                
-                                // Show result
-                                if state.show_result {
-                                    if state.result_correct {
-                                        ui.label(egui::RichText::new("✓ RIGHT!")
-                                            .size(40.0)
-                                            .color(egui::Color32::from_rgb(0, 255, 0)));
-                                    } else {
-                                        ui.label(egui::RichText::new("✗ FALSE")
-                                            .size(40.0)
-                                            .color(egui::Color32::from_rgb(255, 0, 0)));
-                                    }
-                                    
-                                    // Show countdown if auto-moving to next (timeout enabled)
-                                    if state.timeout_enabled {
-                                        if let Some(display_start) = state.result_display_start {
-                                            let elapsed = display_start.elapsed().as_secs();
-                                            let remaining = state.result_display_duration.saturating_sub(elapsed);
-                                            if remaining > 0 {
-                                                ui.label(egui::RichText::new(format!("⏱ Next item in {}s...", remaining))
-                                                    .size(14.0)
-                                                    .color(egui::Color32::from_rgb(150, 150, 150)));
-                                            }
-                                        }
-                                    }
-                                    
-                                    ui.add_space(10.0);
-                                }
-                                
-                                // Show answer after 2 failed attempts
-                                if state.show_answer {
-                                    ui.group(|ui| {
-                                        ui.label(egui::RichText::new("The correct answer was:")
-                                            .size(14.0));
-                                        ui.label(egui::RichText::new(&state.correct_answer)
-                                            .size(28.0)
-                                            .monospace()
-                                            .color(egui::Color32::YELLOW));
-                                    });
-                                    ui.add_space(10.0);
-                                }
-                                
-                                if ui.button(egui::RichText::new("Check Answer")
-                                    .size(18.0)).clicked() {
-                                    
-                                    let decoded = state.decoded_text.trim().to_uppercase();
-                                    let correct = state.correct_answer.trim().to_uppercase();
-                                    
-                                    if decoded == correct {
-                                        state.result_correct = true;
-                                        state.show_result = true;
-                                        state.show_answer = false;
-                                        state.correct_count += 1;
-                                        state.timeout_start = None; // Stop timeout
-                                        state.result_display_start = None; // Manual check, no auto-next
-                                        
-                                        // Remove from wrong answers if it was there
-                                        state.wrong_answers.retain(|item| item.trim().to_uppercase() != correct);
-                                    } else {
-                                        state.result_correct = false;
-                                        state.show_result = true;
-                                        state.attempt_count += 1;
-                                        
-                                        if state.attempt_count >= 2 {
-                                            state.show_answer = true;
-                                            state.wrong_count += 1;
-                                            state.timeout_start = None; // Stop timeout
-                                            state.result_display_start = None; // Manual check, no auto-next
-                                            
-                                            // Add to wrong answers list if not already there
-                                            let correct_ans = state.correct_answer.clone();
-                                            if !state.wrong_answers.contains(&correct_ans) {
-                                                state.wrong_answers.push(correct_ans);
-                                            }
-                                        } else {
-                                            // Play again
-                                            let sink_clone = Arc::clone(&self.playback_sink);
-                                            let training_text = state.current_training_text.clone();
-                                            let wpm_local = wpm;
-                                            let farnsworth_local = farnsworth;
-                                            let freq_local = freq;
-                                            
-                                            // Restart timeout timer
-                                            if state.timeout_enabled {
-                                                state.timeout_start = Some(Instant::now());
-                                            }
-                                            
-                                            thread::spawn(move || {
-                                                thread::sleep(Duration::from_millis(1000));
-                                                let player = MorsePlayer::new_with_farnsworth(freq_local as f32, wpm_local, farnsworth_local);
-                                                let sink = sink_clone.lock().unwrap();
-                                                player.play_morse(&sink, &training_text);
-                                            });
-                                        }
-                                    }
-                                }
-                                
-                                ui.add_space(10.0);
-                                
-                                if ui.button("Next Item").clicked() {
-                                    // Generate next item using helper method
-                                    let next_item = Self::get_next_training_item(&mut state);
-                                    state.current_training_text = next_item.clone();
-                                    
-                                    state.correct_answer.clear();
-                                    state.decoded_text.clear();
-                                    state.show_result = false;
-                                    state.show_answer = false;
-                                    state.attempt_count = 0;
-                                    state.timeout_start = None;
-                                    state.result_display_start = None;
-                                    
-                                    // Auto-play if timeout is enabled
-                                    if state.timeout_enabled {
-                                        state.correct_answer = next_item.clone();
-                                        state.timeout_start = Some(Instant::now());
-                                        
-                                        let sink_clone = Arc::clone(&self.playback_sink);
-                                        let wpm_local = state.wpm;
-                                        let farnsworth_local = state.farnsworth_wpm;
-                                        let freq_local = state.frequency;
-                                        
-                                        thread::spawn(move || {
-                                            let player = MorsePlayer::new_with_farnsworth(freq_local as f32, wpm_local, farnsworth_local);
-                                            let sink = sink_clone.lock().unwrap();
-                                            player.play_morse(&sink, &next_item);
-                                        });
-                                    }
-                                }
-                            }
-                        });
-                    });
-                    
-                    ui.add_space(5.0);
-                    ui.label(egui::RichText::new("💡 Click 'Play Morse Code', listen carefully, then decode it with your paddle")
-                        .italics()
-                        .size(12.0)
-                        .color(egui::Color32::LIGHT_GRAY));
-                }
-            }
+            // Old training mode section removed - now in separate training window
+            
             }); // Close ScrollArea
         });
+        
+        // Training Window - separate window for training features
+        let mut show_training_window = self.state.lock().unwrap().show_training_window;
+        
+        egui::Window::new("🎓 CW Training")
+            .open(&mut show_training_window)
+            .default_size([650.0, 600.0])
+            .resizable(true)
+            .vscroll(true)
+            .show(ctx, |ui| {
+                self.render_training_window(ui);
+            });
+        
+        self.state.lock().unwrap().show_training_window = show_training_window;
     }
 }
 fn automatic_keyer_thread(
@@ -1065,7 +1217,7 @@ fn automatic_keyer_thread(
             let dah_ms = dit_ms * 3;
             
             if left_pressed {
-                // Generate DIT
+                // Generate DIT (left paddle = dit)
                 decoder.lock().unwrap().add_element(true);
                 
                 // Play DIT tone
@@ -1086,7 +1238,7 @@ fn automatic_keyer_thread(
                 thread::sleep(Duration::from_millis(dit_ms as u64));
                 
             } else if right_pressed {
-                // Generate DAH
+                // Generate DAH (right paddle = dah)
                 decoder.lock().unwrap().add_element(false);
                 
                 // Play DAH tone

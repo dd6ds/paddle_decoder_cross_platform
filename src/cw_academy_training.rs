@@ -52,6 +52,7 @@ impl SessionNumber {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PracticeType {
     Characters,
+    CharactersAndNumbers,
     Words,
     Abbreviations,
     Numbers,
@@ -63,6 +64,7 @@ impl PracticeType {
     pub fn as_str(&self) -> &str {
         match self {
             PracticeType::Characters => "Characters",
+            PracticeType::CharactersAndNumbers => "Characters + Numbers",
             PracticeType::Words => "Words",
             PracticeType::Abbreviations => "CW Abbreviations",
             PracticeType::Numbers => "Numbers",
@@ -85,6 +87,40 @@ impl TrainingSession {
     pub fn get_practice_items(&self, practice_type: PracticeType) -> Vec<&'static str> {
         match practice_type {
             PracticeType::Characters => self.characters.clone(),
+            PracticeType::CharactersAndNumbers => {
+                // Combine characters and numbers, filtering out only alphanumeric items
+                let mut combined = Vec::new();
+                for item in &self.characters {
+                    // Only include single alphanumeric characters
+                    if item.len() == 1 && item.chars().all(|c| c.is_alphanumeric()) {
+                        combined.push(*item);
+                    }
+                }
+                for item in &self.numbers {
+                    // Include individual digits from number sequences
+                    for ch in item.chars() {
+                        if ch.is_numeric() {
+                            let digit_str: &'static str = match ch {
+                                '0' => "0",
+                                '1' => "1",
+                                '2' => "2",
+                                '3' => "3",
+                                '4' => "4",
+                                '5' => "5",
+                                '6' => "6",
+                                '7' => "7",
+                                '8' => "8",
+                                '9' => "9",
+                                _ => continue,
+                            };
+                            if !combined.contains(&digit_str) {
+                                combined.push(digit_str);
+                            }
+                        }
+                    }
+                }
+                combined
+            }
             PracticeType::Words => self.words.clone(),
             PracticeType::Abbreviations => self.abbreviations.clone(),
             PracticeType::Numbers => self.numbers.clone(),
@@ -275,6 +311,55 @@ pub fn get_session(session: SessionNumber) -> TrainingSession {
     }
 }
 
+// Get cumulative session (includes all sessions from 1 to selected session)
+pub fn get_cumulative_session(session: SessionNumber) -> TrainingSession {
+    let session_num = session.as_number();
+    let mut combined_chars = Vec::new();
+    let mut combined_words = Vec::new();
+    let mut combined_abbrevs = Vec::new();
+    let mut combined_numbers = Vec::new();
+    let mut combined_callsigns = Vec::new();
+    let mut combined_phrases = Vec::new();
+    
+    // Collect from all sessions up to and including the selected one
+    for i in 1..=session_num {
+        let session_number = match i {
+            1 => SessionNumber::Session1,
+            2 => SessionNumber::Session2,
+            3 => SessionNumber::Session3,
+            4 => SessionNumber::Session4,
+            5 => SessionNumber::Session5,
+            6 => SessionNumber::Session6,
+            7 => SessionNumber::Session7,
+            8 => SessionNumber::Session8,
+            9 => SessionNumber::Session9,
+            10 => SessionNumber::Session10,
+            _ => break,
+        };
+        
+        let sess = get_session(session_number);
+        combined_chars.extend(sess.characters);
+        combined_words.extend(sess.words);
+        combined_abbrevs.extend(sess.abbreviations);
+        combined_numbers.extend(sess.numbers);
+        combined_callsigns.extend(sess.callsigns);
+        combined_phrases.extend(sess.phrases);
+    }
+    
+    // Remove duplicates from characters
+    combined_chars.sort();
+    combined_chars.dedup();
+    
+    TrainingSession {
+        characters: combined_chars,
+        words: combined_words,
+        abbreviations: combined_abbrevs,
+        numbers: combined_numbers,
+        callsigns: combined_callsigns,
+        phrases: combined_phrases,
+    }
+}
+
 pub fn get_all_sessions() -> Vec<SessionNumber> {
     vec![
         SessionNumber::Session1,
@@ -293,6 +378,7 @@ pub fn get_all_sessions() -> Vec<SessionNumber> {
 pub fn get_practice_types() -> Vec<PracticeType> {
     vec![
         PracticeType::Characters,
+        PracticeType::CharactersAndNumbers,
         PracticeType::Words,
         PracticeType::Abbreviations,
         PracticeType::Numbers,
@@ -368,7 +454,8 @@ pub fn get_session_characters(session: SessionNumber) -> Vec<char> {
     let sess = get_session(session);
     let mut chars = Vec::new();
     
-    for item in sess.get_practice_items(PracticeType::Characters) {
+    // Get both characters and numbers using the CharactersAndNumbers practice type
+    for item in sess.get_practice_items(PracticeType::CharactersAndNumbers) {
         for ch in item.chars() {
             if ch.is_alphanumeric() {
                 chars.push(ch);
