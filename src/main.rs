@@ -731,15 +731,12 @@ impl PaddleDecoderApp {
                             if state.show_result {
                                 ui.group(|ui| {
                                     ui.vertical_centered(|ui| {
-                                        if state.result_correct {
-                                            ui.label(egui::RichText::new("✓ RIGHT!")
-                                                .size(32.0)
-                                                .color(egui::Color32::from_rgb(0, 255, 0)));
-                                        } else {
+                                        if !state.result_correct {
                                             ui.label(egui::RichText::new("✗ WRONG")
                                                 .size(32.0)
                                                 .color(egui::Color32::from_rgb(255, 0, 0)));
                                         }
+                                        // Removed "RIGHT!" display
                                     });
                                 });
                                 ui.add_space(5.0);
@@ -784,7 +781,7 @@ impl PaddleDecoderApp {
                         ui.horizontal(|ui| {
                             ui.checkbox(&mut state.timeout_enabled, "⏱ Auto-Timeout");
                             if state.timeout_enabled {
-                                ui.add(egui::Slider::new(&mut state.timeout_seconds, 10..=120)
+                                ui.add(egui::Slider::new(&mut state.timeout_seconds, 1..=120)
                                     .suffix("s"));
                                 
                                 // Show time remaining inline
