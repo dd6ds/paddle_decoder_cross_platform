@@ -99,7 +99,19 @@ ATtiny85 GND         →  Paddle common ground
 
 ## 🎮 Using the GUI
 
+
+
+
 ### **Visual Interface:**
+
+
+**Main Interface:**
+![Paddle Decoder GUI - Main View](UI_1.png)
+
+**In Action:**
+![Paddle Decoder GUI - Decoding](UI_2.png)
+
+
 
 ```
 ┌────────────────────────────────────────┐
