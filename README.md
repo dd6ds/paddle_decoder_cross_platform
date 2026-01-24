@@ -64,7 +64,7 @@ ATtiny85 GND         →  Paddle common ground
 1. Install Arduino IDE (available for all platforms)
 2. Add Digispark board support:
    - File → Preferences → Additional Board Manager URLs
-   - Add: `http://digistump.com/package_digistump_index.json`
+   - Add: `[http://digistump.com/package_digistump_index.json](https://raw.githubusercontent.com/digistump/arduino-boards-index/master/package_digistump_index.json)`
 3. Tools → Board → Board Manager → Install "Digistump AVR Boards"
 4. Install DigiMIDI library (Sketch → Include Library → Manage Libraries)
 5. Open `paddle_decoder.ino`
